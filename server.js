@@ -12,7 +12,9 @@ app.use(express.json());
 
 const API_KEY = process.env.GEMINI_API_KEY;
 const PORT = process.env.PORT || 5000;
-
+app.get("/", (req, res) => {
+  res.send("🚀 MindMap AI Backend is running!");
+});
 /**
  * 🎯 MODEL SELECTION: 
  * Your dashboard shows 'Gemini 2.5 Flash' has a 10K daily limit.
