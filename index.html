@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NeuralMap AI</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body, #root { width: 100%; height: 100%; overflow: hidden; background: #05070f; }
+  body { font-family: 'Syne', sans-serif; }
+
+  @keyframes pulse-ring {
+    0% { transform: scale(1); opacity: 0.8; }
+    100% { transform: scale(2.5); opacity: 0; }
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-8px); }
+  }
+  @keyframes shimmer {
+    0% { background-position: -200% center; }
+    100% { background-position: 200% center; }
+  }
+  @keyframes spin-slow {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  @keyframes bounce-in {
+    0% { transform: scale(0) rotate(-10deg); opacity: 0; }
+    60% { transform: scale(1.2) rotate(3deg); opacity: 1; }
+    80% { transform: scale(0.95) rotate(-1deg); }
+    100% { transform: scale(1) rotate(0deg); }
+  }
+  @keyframes wiggle {
+    0%, 100% { transform: rotate(0deg); }
+    25% { transform: rotate(-5deg); }
+    75% { transform: rotate(5deg); }
+  }
+  @keyframes slide-in-bottom {
+    from { transform: translateY(30px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+  @keyframes gradient-shift {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+  }
+  @keyframes node-appear {
+    0% { transform: scale(0) rotate(180deg); opacity: 0; }
+    70% { transform: scale(1.15) rotate(-5deg); opacity: 1; }
+    100% { transform: scale(1) rotate(0deg); opacity: 1; }
+  }
+  @keyframes trail-fade {
+    from { opacity: 0.6; }
+    to { opacity: 0; transform: scale(2); }
+  }
+  @keyframes connecting-pulse {
+    0%, 100% { stroke-opacity: 0.5; }
+    50% { stroke-opacity: 1; }
+  }
+  @keyframes particle-drift {
+    0% { transform: translate(0, 0) scale(1); opacity: 0.8; }
+    100% { transform: translate(var(--dx), var(--dy)) scale(0); opacity: 0; }
+  }
+
+  .node-container {
+    position: absolute;
+    cursor: grab;
+    user-select: none;
+    animation: bounce-in 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+    transform-origin: center;
+  }
+  .node-container:active { cursor: grabbing; }
+
+  .glow-btn {
+    background: linear-gradient(135deg, #7c3aed, #3b82f6);
+    border: none;
+    border-radius: 12px;
+    color: white;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 15px;
+    padding: 14px 32px;
+    cursor: pointer;
+    transition: all 0.3s;
+    box-shadow: 0 0 30px rgba(124, 58, 237, 0.5);
+    position: relative;
+    overflow: hidden;
+  }
+  .glow-btn::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -60%;
+    width: 40%;
+    height: 200%;
+    background: rgba(255,255,255,0.15);
+    transform: skewX(-20deg);
+    transition: left 0.5s;
+  }
+  .glow-btn:hover::before { left: 160%; }
+  .glow-btn:hover { transform: translateY(-2px); box-shadow: 0 0 50px rgba(124, 58, 237, 0.8), 0 0 80px rgba(59, 130, 246, 0.4); }
+  .glow-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+  .expand-btn {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    border: 1.5px solid;
+    background: rgba(0,0,0,0.6);
+    color: white;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s;
+    flex-shrink: 0;
+    line-height: 1;
+  }
+  .expand-btn:hover { transform: scale(1.3) rotate(90deg); }
+
+  .toast {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(15, 20, 40, 0.95);
+    border: 1px solid rgba(124, 58, 237, 0.5);
+    border-radius: 12px;
+    padding: 12px 24px;
+    color: #c4b5fd;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    backdrop-filter: blur(20px);
+    animation: slide-in-bottom 0.3s ease;
+    z-index: 9999;
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
+
+const COLORS = {
+  root: { bg: '#7c3aed', glow: '#a855f7', text: '#fff', border: '#c4b5fd' },
+  l1:   { bg: '#0f766e', glow: '#14b8a6', text: '#fff', border: '#5eead4' },
+  l2:   { bg: '#1d4ed8', glow: '#3b82f6', text: '#fff', border: '#93c5fd' },
+  l3:   { bg: '#9f1239', glow: '#f43f5e', text: '#fff', border: '#fda4af' },
+  l4:   { bg: '#92400e', glow: '#f59e0b', text: '#fff', border: '#fcd34d' },
+};
+
+const EMOJIS = ['🧠','⚡','🌐','🔮','💡','🎯','🚀','✨','🌊','🎪','🦋','🎭','🌈','🔥','💎','🎲'];
+function randEmoji() { return EMOJIS[Math.floor(Math.random() * EMOJIS.length)]; }
+function getColor(level) {
+  if (level === 0) return COLORS.root;
+  if (level === 1) return COLORS.l1;
+  if (level === 2) return COLORS.l2;
+  if (level === 3) return COLORS.l3;
+  return COLORS.l4;
+}
+
+function ParticleBurst({ x, y, color, onDone }) {
+  const particles = Array.from({ length: 10 }, (_, i) => {
+    const angle = (i / 10) * Math.PI * 2;
+    const dist = 40 + Math.random() * 30;
+    return { dx: Math.cos(angle) * dist + 'px', dy: Math.sin(angle) * dist + 'px', delay: i * 30 };
+  });
+  useEffect(() => { const t = setTimeout(onDone, 800); return () => clearTimeout(t); }, []);
+  return (
+    <div style={{ position: 'absolute', left: x, top: y, pointerEvents: 'none', zIndex: 9000 }}>
+      {particles.map((p, i) => (
+        <div key={i} style={{
+          position: 'absolute', width: 6, height: 6, borderRadius: '50%',
+          background: color, boxShadow: `0 0 8px ${color}`, left: 0, top: 0,
+          '--dx': p.dx, '--dy': p.dy,
+          animation: `particle-drift 0.7s ease-out ${p.delay}ms forwards`,
+        }} />
+      ))}
+    </div>
+  );
+}
+
+function TrailDot({ x, y, color }) {
+  return (
+    <div style={{
+      position: 'absolute', left: x - 4, top: y - 4, width: 8, height: 8,
+      borderRadius: '50%', background: color, boxShadow: `0 0 12px ${color}`,
+      pointerEvents: 'none', animation: 'trail-fade 0.8s ease forwards', zIndex: 100,
+    }} />
+  );
+}
+
+function Edges({ nodes, edges }) {
+  return (
+    <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 1 }}>
+      <defs>
+        <filter id="edge-glow">
+          <feGaussianBlur stdDeviation="2" result="blur" />
+          <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+        </filter>
+      </defs>
+      {edges.map(({ from, to }, i) => {
+        const a = nodes.find(n => n.id === from);
+        const b = nodes.find(n => n.id === to);
+        if (!a || !b) return null;
+        const color = getColor(b.level).glow;
+        const cx = (a.x + b.x) / 2;
+        const cy = (a.y + b.y) / 2 - 40;
+        return (
+          <g key={i}>
+            <path d={`M ${a.x} ${a.y} Q ${cx} ${cy} ${b.x} ${b.y}`}
+              stroke={color} strokeWidth="1.5" fill="none" strokeOpacity="0.3" filter="url(#edge-glow)" />
+            <path id={`path-${i}`} d={`M ${a.x} ${a.y} Q ${cx} ${cy} ${b.x} ${b.y}`} fill="none" stroke="none" />
+            <circle r="4" fill={color} opacity="0.8">
+              <animateMotion dur={`${2 + (i % 3)}s`} repeatCount="indefinite">
+                <mpath href={`#path-${i}`} />
+              </animateMotion>
+            </circle>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+function MindNode({ node, onDrag, onExpand, isLoading }) {
+  const dragging = useRef(false);
+  const offset = useRef({ x: 0, y: 0 });
+  const col = getColor(node.level);
+  const size = node.level === 0 ? 130 : node.level === 1 ? 110 : 90;
+  const fontSize = node.level === 0 ? 13 : node.level === 1 ? 11 : 10;
+
+  function onMouseDown(e) {
+    if (e.target.closest('.expand-btn')) return;
+    dragging.current = true;
+    offset.current = { x: e.clientX - node.x, y: e.clientY - node.y };
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  }
+  function onMouseMove(e) {
+    if (!dragging.current) return;
+    onDrag(node.id, e.clientX - offset.current.x, e.clientY - offset.current.y, col.glow);
+  }
+  function onMouseUp() {
+    dragging.current = false;
+    window.removeEventListener('mousemove', onMouseMove);
+    window.removeEventListener('mouseup', onMouseUp);
+  }
+
+  return (
+    <div className="node-container"
+      style={{ left: node.x - size/2, top: node.y - size/2, width: size, height: size,
+        zIndex: node.level === 0 ? 50 : 20, animationDelay: `${node.animDelay || 0}ms` }}
+      onMouseDown={onMouseDown}>
+      {node.level === 0 && (
+        <div style={{ position: 'absolute', inset: -20, borderRadius: '50%',
+          border: `2px solid ${col.glow}`, animation: 'pulse-ring 2s ease-out infinite', pointerEvents: 'none' }} />
+      )}
+      <div style={{
+        width: '100%', height: '100%', borderRadius: '50%',
+        background: `radial-gradient(circle at 35% 35%, ${col.bg}cc, ${col.bg}88)`,
+        border: `2px solid ${col.border}`,
+        boxShadow: `0 0 20px ${col.glow}66, 0 0 40px ${col.glow}33, inset 0 1px 0 rgba(255,255,255,0.2)`,
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        padding: '8px', gap: 3, position: 'relative',
+        animation: node.level === 0 ? 'float 3s ease-in-out infinite' : undefined,
+      }}>
+        <span style={{ fontSize: node.level === 0 ? 22 : 16 }}>{node.emoji}</span>
+        <span style={{ color: col.text, fontFamily: 'Syne', fontWeight: 700, fontSize,
+          textAlign: 'center', lineHeight: 1.2, wordBreak: 'break-word', padding: '0 4px' }}>
+          {node.label}
+        </span>
+        {!node.loading ? (
+          <button className="expand-btn" style={{ borderColor: col.border, color: col.border }}
+            onClick={() => onExpand(node)}>
+            {isLoading ? '⏳' : '+'}
+          </button>
+        ) : (
+          <div style={{ width: 20, height: 20, border: `2px solid ${col.border}`,
+            borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin-slow 0.8s linear infinite' }} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Starfield() {
+  const stars = useRef(Array.from({ length: 120 }, () => ({
+    x: Math.random() * 100, y: Math.random() * 100,
+    size: Math.random() * 2 + 0.5, opacity: Math.random() * 0.5 + 0.1, dur: 2 + Math.random() * 4,
+  })));
+  return (
+    <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+      {stars.current.map((s, i) => (
+        <div key={i} style={{
+          position: 'absolute', left: `${s.x}%`, top: `${s.y}%`,
+          width: s.size, height: s.size, borderRadius: '50%', background: 'white', opacity: s.opacity,
+          animation: `float ${s.dur}s ease-in-out ${i * 50}ms infinite alternate`,
+        }} />
+      ))}
+    </div>
+  );
+}
+
+const FUN_TIPS = [
+  "Drag nodes anywhere you want!",
+  "Click + to expand any node with AI",
+  "Try 'quantum computing' or 'black holes'",
+  "Each node is its own universe 🌌",
+  "The trails follow your cursor!",
+];
+
+function App() {
+  const [topic, setTopic] = useState('');
+  const [nodes, setNodes] = useState([]);
+  const [edges, setEdges] = useState([]);
+  const [trails, setTrails] = useState([]);
+  const [bursts, setBursts] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [expandingId, setExpandingId] = useState(null);
+  const [toast, setToast] = useState(null);
+  const [started, setStarted] = useState(false);
+  const [tipIndex, setTipIndex] = useState(0);
+  const [showTip, setShowTip] = useState(false);
+  const trailTimer = useRef(null);
+  const nodeCounter = useRef(0);
+
+  useEffect(() => {
+    const t = setInterval(() => {
+      setTipIndex(i => (i + 1) % FUN_TIPS.length);
+      setShowTip(true);
+      setTimeout(() => setShowTip(false), 3500);
+    }, 8000);
+    return () => clearInterval(t);
+  }, []);
+
+  function showToast(msg) { setToast(msg); setTimeout(() => setToast(null), 3000); }
+  function addBurst(x, y, color) {
+    const id = Date.now() + Math.random();
+    setBursts(b => [...b, { id, x, y, color }]);
+  }
+  function removeBurst(id) { setBursts(b => b.filter(p => p.id !== id)); }
+
+  function handleDrag(id, nx, ny, color) {
+    setNodes(ns => ns.map(n => n.id === id ? { ...n, x: nx, y: ny } : n));
+    clearTimeout(trailTimer.current);
+    const tid = Date.now() + Math.random();
+    setTrails(t => [...t.slice(-40), { id: tid, x: nx, y: ny, color }]);
+    trailTimer.current = setTimeout(() => setTrails(t => t.filter(tr => tr.id !== tid)), 900);
+  }
+
+  async function generateRoot(t) {
+    setLoading(true);
+    setStarted(true);
+    const cx = window.innerWidth / 2;
+    const cy = window.innerHeight / 2;
+    try {
+      const res = await fetch('http://localhost:5000/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic: t })
+      });
+      // Read body once — handles both ok and error responses
+      const backendData = await res.json();
+      if (!res.ok) throw new Error(backendData.error || `Server error ${res.status}`);
+
+      const backendRoot = backendData.nodes.find(n => n.level === 0);
+      const backendChildren = backendData.nodes.filter(n => n.level === 1);
+
+      const rootId = ++nodeCounter.current;
+      const rootNode = { id: rootId, label: backendRoot.label, emoji: randEmoji(), level: 0, x: cx, y: cy, animDelay: 0 };
+      const newNodes = [rootNode];
+      const newEdges = [];
+      backendChildren.forEach((c, i) => {
+        const angle = (i / backendChildren.length) * Math.PI * 2 - Math.PI / 2;
+        const id = ++nodeCounter.current;
+        newNodes.push({ id, label: c.label, emoji: randEmoji(), level: 1,
+          x: cx + Math.cos(angle) * 200, y: cy + Math.sin(angle) * 200, animDelay: 100 + i * 80 });
+        newEdges.push({ from: rootId, to: id });
+      });
+      setNodes(newNodes);
+      setEdges(newEdges);
+      addBurst(cx, cy, '#a855f7');
+      showToast('🧠 Mind map generated! Click + on any node to expand.');
+    } catch (e) {
+      const msg = e.message || 'Unknown error';
+      showToast(`⚠️ ${msg.length > 80 ? msg.slice(0, 80) + '…' : msg}`);
+    }
+    setLoading(false);
+  }
+
+  async function expandNode(node) {
+    if (expandingId) return;
+    setExpandingId(node.id);
+    setNodes(ns => ns.map(n => n.id === node.id ? { ...n, loading: true } : n));
+    try {
+      const res = await fetch('http://localhost:5000/expand', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ label: node.label })
+      });
+      // Read body once — handles both ok and error responses
+      const backendData = await res.json();
+      if (!res.ok) throw new Error(backendData.error || `Server error ${res.status}`);
+
+      const backendChildren = backendData.nodes.filter(n => n.level === 1);
+
+      const newNodes = [];
+      const newEdges = [];
+      backendChildren.forEach((c, i) => {
+        const angle = (i / backendChildren.length) * Math.PI * 2 + Math.random() * 0.5;
+        const id = ++nodeCounter.current;
+        newNodes.push({ id, label: c.label, emoji: randEmoji(),
+          level: Math.min(node.level + 1, 4),
+          x: node.x + Math.cos(angle) * (150 + Math.random() * 40),
+          y: node.y + Math.sin(angle) * (150 + Math.random() * 40),
+          animDelay: i * 100 });
+        newEdges.push({ from: node.id, to: id });
+      });
+      setNodes(ns => [...ns.map(n => n.id === node.id ? { ...n, loading: false } : n), ...newNodes]);
+      setEdges(es => [...es, ...newEdges]);
+      addBurst(node.x, node.y, getColor(node.level).glow);
+    } catch (e) {
+      setNodes(ns => ns.map(n => n.id === node.id ? { ...n, loading: false } : n));
+      const msg = e.message || 'Unknown error';
+      showToast(`⚠️ ${msg.length > 80 ? msg.slice(0, 80) + '…' : msg}`);
+    }
+    setExpandingId(null);
+  }
+
+  return (
+    <div style={{ width: '100vw', height: '100vh', background: 'radial-gradient(ellipse at 50% 0%, #1a0533 0%, #05070f 60%)', position: 'relative', overflow: 'hidden' }}>
+      <Starfield />
+      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
+        backgroundImage: `linear-gradient(rgba(124,58,237,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(124,58,237,0.04) 1px, transparent 1px)`,
+        backgroundSize: '60px 60px' }} />
+
+      {trails.map(t => <TrailDot key={t.id} x={t.x} y={t.y} color={t.color} />)}
+      {bursts.map(b => <ParticleBurst key={b.id} x={b.x} y={b.y} color={b.color} onDone={() => removeBurst(b.id)} />)}
+      {nodes.length > 0 && <Edges nodes={nodes} edges={edges} />}
+      {nodes.map(n => (
+        <MindNode key={n.id} node={n} onDrag={handleDrag} onExpand={expandNode} isLoading={expandingId === n.id} />
+      ))}
+
+      {/* Header */}
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, padding: '20px 32px',
+        display: 'flex', alignItems: 'center', gap: 16,
+        background: 'linear-gradient(180deg, rgba(5,7,15,0.95) 0%, transparent 100%)', zIndex: 200 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 36, height: 36, borderRadius: '50%',
+            background: 'linear-gradient(135deg, #7c3aed, #3b82f6)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 18, boxShadow: '0 0 20px rgba(124,58,237,0.6)', animation: 'wiggle 3s ease-in-out infinite' }}>🧠</div>
+          <span style={{ fontFamily: 'Syne', fontWeight: 800, fontSize: 20,
+            background: 'linear-gradient(90deg, #a855f7, #3b82f6, #a855f7)', backgroundSize: '200% auto',
+            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', animation: 'shimmer 3s linear infinite' }}>
+            NeuralMap AI
+          </span>
+        </div>
+        <div style={{ flex: 1, display: 'flex', gap: 12, maxWidth: 520, margin: '0 auto' }}>
+          <input value={topic} onChange={e => setTopic(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && topic.trim() && !loading && generateRoot(topic.trim())}
+            placeholder="Type any topic... (e.g. 'Black Holes', 'Jazz Music')"
+            style={{ flex: 1, background: 'rgba(255,255,255,0.05)', border: '1.5px solid rgba(124,58,237,0.5)',
+              borderRadius: 12, padding: '12px 18px', color: '#e2d9f3', fontFamily: 'JetBrains Mono',
+              fontSize: 14, outline: 'none' }}
+            onFocus={e => { e.target.style.borderColor = '#a855f7'; e.target.style.boxShadow = '0 0 20px rgba(168,85,247,0.3)'; }}
+            onBlur={e => { e.target.style.borderColor = 'rgba(124,58,237,0.5)'; e.target.style.boxShadow = 'none'; }} />
+          <button className="glow-btn"
+            onClick={() => topic.trim() && !loading && generateRoot(topic.trim())}
+            disabled={!topic.trim() || loading}>
+            {loading ? '⏳ Thinking...' : '✨ Generate'}
+          </button>
+          {nodes.length > 0 && (
+            <button className="glow-btn"
+              style={{ background: 'linear-gradient(135deg, #374151, #1f2937)', boxShadow: 'none' }}
+              onClick={() => { setNodes([]); setEdges([]); setTrails([]); setTopic(''); setStarted(false); }}>
+              🗑️ Clear
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Hero */}
+      {!started && !loading && (
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center', gap: 20, paddingTop: 80, pointerEvents: 'none' }}>
+          <div style={{ fontSize: 80, animation: 'float 3s ease-in-out infinite' }}>🧠</div>
+          <h1 style={{ fontFamily: 'Syne', fontWeight: 800, fontSize: 52,
+            background: 'linear-gradient(90deg, #a855f7 0%, #3b82f6 50%, #a855f7 100%)', backgroundSize: '200% auto',
+            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', animation: 'shimmer 3s linear infinite',
+            textAlign: 'center' }}>Think in webs.</h1>
+          <p style={{ color: 'rgba(196,181,253,0.6)', fontFamily: 'JetBrains Mono', fontSize: 16,
+            textAlign: 'center', lineHeight: 1.6 }}>
+            AI-powered mind maps that grow with you.<br/>Type a topic above → watch your ideas explode.
+          </p>
+          <div style={{ display: 'flex', gap: 10, marginTop: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
+            {['Climate Change', 'Machine Learning', 'Jazz Music', 'Black Holes', 'Startup Ideas'].map(s => (
+              <button key={s}
+                style={{ pointerEvents: 'all', background: 'rgba(124,58,237,0.15)',
+                  border: '1px solid rgba(124,58,237,0.4)', borderRadius: 20, padding: '8px 16px',
+                  color: '#c4b5fd', fontFamily: 'JetBrains Mono', fontSize: 13, cursor: 'pointer', transition: 'all 0.2s' }}
+                onMouseEnter={e => { e.target.style.background = 'rgba(124,58,237,0.4)'; e.target.style.transform = 'scale(1.05)'; }}
+                onMouseLeave={e => { e.target.style.background = 'rgba(124,58,237,0.15)'; e.target.style.transform = 'scale(1)'; }}
+                onClick={() => { setTopic(s); generateRoot(s); }}>
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Tip */}
+      {showTip && started && (
+        <div style={{ position: 'absolute', bottom: 24, right: 24,
+          background: 'rgba(15,10,30,0.9)', border: '1px solid rgba(124,58,237,0.4)', borderRadius: 12,
+          padding: '10px 16px', color: '#c4b5fd', fontFamily: 'JetBrains Mono', fontSize: 12,
+          backdropFilter: 'blur(20px)', maxWidth: 260, animation: 'slide-in-bottom 0.5s ease' }}>
+          💬 {FUN_TIPS[tipIndex]}
+        </div>
+      )}
+
+      {toast && <div className="toast">{toast}</div>}
+
+      {/* Legend */}
+      {started && (
+        <div style={{ position: 'absolute', bottom: 24, left: 24, display: 'flex', gap: 10, flexWrap: 'wrap', animation: 'slide-in-bottom 0.5s ease' }}>
+          {[['Root', COLORS.root.glow], ['Level 1', COLORS.l1.glow], ['Level 2', COLORS.l2.glow], ['Level 3', COLORS.l3.glow]].map(([label, color]) => (
+            <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ width: 10, height: 10, borderRadius: '50%', background: color, boxShadow: `0 0 8px ${color}` }} />
+              <span style={{ color: 'rgba(255,255,255,0.4)', fontFamily: 'JetBrains Mono', fontSize: 11 }}>{label}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
