@@ -357,12 +357,15 @@ function App() {
     setStarted(true);
     const cx = window.innerWidth / 2;
     const cy = window.innerHeight / 2;
+   const API_BASE = "https://gemini-hack-5hxz.onrender.com";
     try {
-      const res = await fetch('http://localhost:5000/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic: t })
-      });
+     const API_BASE = "https://gemini-hack-5hxz.onrender.com";
+
+const res = await fetch(`${API_BASE}/generate`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ topic: t })
+});
       // Read body once — handles both ok and error responses
       const backendData = await res.json();
       if (!res.ok) throw new Error(backendData.error || `Server error ${res.status}`);
