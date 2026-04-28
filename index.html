@@ -400,6 +400,7 @@ const res = await fetch(`${API_BASE}/generate`, {
     setExpandingId(node.id);
     setNodes(ns => ns.map(n => n.id === node.id ? { ...n, loading: true } : n));
     try {
+     const API_BASE = "https://gemini-hack-5hxz.onrender.com";
       const res = await fetch(`${API_BASE}/expand`, {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
