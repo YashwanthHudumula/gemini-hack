@@ -8,8 +8,11 @@ dotenv.config();
 
 const app = express();
 app.use(cors({
-  origin: "*",
-  methods: ["GET", "POST"]
+  origin: [
+    "https://yashwanthhudumula.github.io"
+  ],
+  methods: ["GET", "POST"],
+  allowedHeaders: ["Content-Type"]
 }));
 app.use(express.json());
 
