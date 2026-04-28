@@ -400,11 +400,11 @@ const res = await fetch(`${API_BASE}/generate`, {
     setExpandingId(node.id);
     setNodes(ns => ns.map(n => n.id === node.id ? { ...n, loading: true } : n));
     try {
-      const res = await fetch('http://localhost:5000/expand', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ label: node.label })
-      });
+      const res = await fetch(`${API_BASE}/expand`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ label: node.label })
+});
       // Read body once — handles both ok and error responses
       const backendData = await res.json();
       if (!res.ok) throw new Error(backendData.error || `Server error ${res.status}`);
