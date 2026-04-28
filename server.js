@@ -7,7 +7,10 @@ import { jsonrepair } from "jsonrepair";
 dotenv.config();
 
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: "*",
+  methods: ["GET", "POST"]
+}));
 app.use(express.json());
 
 const API_KEY = process.env.GEMINI_API_KEY;
